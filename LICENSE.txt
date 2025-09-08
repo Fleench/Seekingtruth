@@ -1,6 +1,25 @@
-MIT License
+# Project License
 
-Copyright (c) 2021 jackyzha0
+The content of this project is licensed separately from the code.
+
+## Content License
+
+The content of this digital garden, primarily the text contained in the Markdown (`.md`) files, is licensed under the [Creative Commons Attribution-ShareAlike 4.0 International License](http://creativecommons.org/licenses/by-sa/4.0/) (CC BY-SA 4.0).
+
+[![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
+
+[cc-by-sa]: http://creativecommons.org/licenses/by-sa/4.0/
+[cc-by-sa-shield]: https://img.shields.io/badge/License-CC%20BY--SA%204.0-lightgrey.svg
+
+## Code License
+
+The code used to generate and display this site is licensed under the MIT License, unless otherwise stated in specific files. This includes all files in the `quartz` directory, configuration files, scripts, and stylesheets.
+
+---
+
+### The MIT License
+
+Copyright (c) [year] [copyright holder]
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
