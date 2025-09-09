@@ -27,7 +27,8 @@ function safeNormalizePath(s: any) {
       out = new URL(out).pathname
     }
   } catch {}
-  out = out.replace(/\\/+/g, "/")
+  // collapse multiple slashes into one, but keep protocol slashes intact
+  out = out.replace(/([^:]\/)\/+/g, "$1")
   out = stripHtmlExt(out)
   out = out.replace(/^\/+|\/+$/g, "")
   return out
