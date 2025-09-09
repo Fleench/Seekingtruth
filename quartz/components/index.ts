@@ -50,4 +50,5 @@ export {
   Comments,
   Flex,
   ConditionalRender,
+  CustomProperties,
 }
