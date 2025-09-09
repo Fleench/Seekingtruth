@@ -1,13 +1,28 @@
 // quartz/components/CustomProperties.tsx
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
+import path from "path"
 
-// simple slugify fallback since Quartz v4.5.1 doesn't export slugify directly
-function slugify(text: string): string {
-  return "/" + text
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-]/g, "")
+// Convert Obsidian-style [[links]] to Quartz paths
+// Example: [[md]] with file at /authors/flench04.md should resolve to /authors/flench04
+function resolveWikiLink(link: string, fileData: any): string {
+  // Normalize alias form [[target|alias]]
+  const obsidianLink = link.match(/^\[\[(.+?)(\|(.+))?\]\]$/)
+  if (!obsidianLink) return link
+
+  const target = obsidianLink[1]
+  // Find file by matching basename with target
+  // fileData.vfileLinks should contain backlinks/links if Quartz built them
+  if (fileData.allFiles) {
+    for (const f of fileData.allFiles) {
+      const base = path.basename(f.slug)
+      if (base.toLowerCase() === target.toLowerCase()) {
+        return f.slug
+      }
+    }
+  }
+
+  // Fallback: naive slug
+  return "/" + target.trim().toLowerCase().replace(/\s+/g, "-")
 }
 
 function CustomProperties({ fileData }: QuartzComponentProps) {
@@ -37,10 +52,8 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
       // Handle Obsidian-style [[Page]] or [[Page|Alias]]
       const obsidianLink = value.match(/^\[\[(.+?)(\|(.+))?\]\]$/)
       if (obsidianLink) {
-        const target = obsidianLink[1] // page name
-        const alias = obsidianLink[3] || target
-        const href = slugify(target)
-
+        const alias = obsidianLink[3] || obsidianLink[1]
+        const href = resolveWikiLink(value, fileData)
         return <a href={href}>{alias}</a>
       }
 
