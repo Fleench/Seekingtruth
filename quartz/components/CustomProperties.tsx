@@ -1,6 +1,14 @@
 // quartz/components/CustomProperties.tsx
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
-import { slugify } from "../util/path" // Quartz has a built-in slugify helper
+
+// simple slugify fallback since Quartz v4.5.1 doesn't export slugify directly
+function slugify(text: string): string {
+  return "/" + text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-]/g, "")
+}
 
 function CustomProperties({ fileData }: QuartzComponentProps) {
   const frontmatter = fileData.frontmatter
@@ -31,7 +39,7 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
       if (obsidianLink) {
         const target = obsidianLink[1] // page name
         const alias = obsidianLink[3] || target
-        const href = slugify(target) // use Quartz's slugify for proper URL generation
+        const href = slugify(target)
 
         return <a href={href}>{alias}</a>
       }
