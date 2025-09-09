@@ -24,6 +24,7 @@ export const defaultContentPageLayout: PageLayout = {
     Component.ArticleTitle(),
     Component.ContentMeta(),
     Component.TagList(),
+    Component.MobileOnly(Component.CustomProperties()),
   ],
   left: [
     Component.PageTitle(),
@@ -42,6 +43,7 @@ export const defaultContentPageLayout: PageLayout = {
   ],
   right: [
     Component.Graph(),
+    Component.DesktopOnly(Component.CustomProperties()),
     Component.DesktopOnly(Component.TableOfContents()),
     Component.Backlinks(),
   ],
