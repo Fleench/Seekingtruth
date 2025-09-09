@@ -9,8 +9,10 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
 
   // A list of properties to ignore from display
   // You can customize this list to add or remove property names
-  const ignoreList = new Set(['title', 'tags', 'date', 'publishDate', 'draft', 'aliases', 'description'])
-
+const ignoreList = new Set([
+  'title', 'tags', 'date', 'publishdate', 'draft', 'aliases', 'description',
+  'publish', 'created', 'published', 'cssclasses'
+])
   // Get all property keys, then filter out the ones to ignore AND the ones with empty values
   const properties = Object.keys(frontmatter)
     .filter(key => !ignoreList.has(key))
