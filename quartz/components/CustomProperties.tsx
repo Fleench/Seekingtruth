@@ -5,11 +5,10 @@ import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } fro
 function slugifyKeepDirs(text: string): string {
   return text
     .trim()
-    .replace(/^\/+/g, "")
-    .replace(/\/+$/g, "")
-    .toLowerCase()
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "")
     .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-\/]/g, "")
+    .replace(/[^A-Za-z0-9\-\/]/g, "")
 }
 
 function ensureLeadingSlash(s: string) {
@@ -18,10 +17,12 @@ function ensureLeadingSlash(s: string) {
 }
 
 function deriveSiteBase(fileData: any): string {
+  // Try common config keys first
   const cfg = fileData?.site?.basePath || fileData?.site?.base || fileData?.base || fileData?.siteBase || ''
-  if (!cfg) return ''
-  let out = String(cfg)
-  if (out.startsWith("http")) {
+  let out = String(cfg || '')
+
+  // If config points to a full URL, extract pathname
+  if (out && out.startsWith("http")) {
     try {
       const u = new URL(out)
       out = u.pathname
@@ -29,11 +30,31 @@ function deriveSiteBase(fileData: any): string {
       // ignore
     }
   }
+
+  // If user explicitly set root '/', treat it as empty base
   if (out === "/") return ''
-  return out.replace(/\/+$/g, '')
+  out = out.replace(/\/+$/g, '')
+  if (out) return out
+
+  // --- FALLBACK: try to infer from runtime location (client-side only) ---
+  try {
+    if (typeof window !== 'undefined' && window?.location?.pathname) {
+      const p = String(window.location.pathname || '/')
+        .replace(/\/+$|\\/g, '/')
+        .replace(/\/+$/g, '')
+      const parts = p.split('/').filter(Boolean)
+      // Typical GitHub Pages repo sites use the first path segment as the repo name
+      if (parts.length > 0) {
+        return '/' + parts[0]
+      }
+    }
+  } catch {}
+
+  return ''
 }
 
-function normalizeFileEntrySlug(f: any): string {
+// return both original-casing path and a lower-cased version for matching
+function getFileSlugInfo(f: any): { original: string, lower: string } {
   const guess = (f && (f.slug || f.url || f.path || f.file || f.relativePath || f.filePath || f._path || f.href || f.name)) || ''
   let s = String(guess || '')
   try {
@@ -42,8 +63,10 @@ function normalizeFileEntrySlug(f: any): string {
     }
   } catch {}
   s = s.replace(/\.mdx?$|\.html?$/i, '')
-  s = s.replace(/^\/+|\/+$/g, '').toLowerCase()
-  return s
+  s = s.replace(/^\/+|\/+$/g, '')
+  const original = s
+  const lower = original.toLowerCase()
+  return { original, lower }
 }
 
 function resolveWikiLink(link: string, fileData: any): string {
@@ -51,24 +74,30 @@ function resolveWikiLink(link: string, fileData: any): string {
   if (!obsidianLink) return String(link)
 
   const rawTarget = obsidianLink[1].trim()
-  const targetNormalized = slugifyKeepDirs(rawTarget)
+  const targetNormalized = slugifyKeepDirs(rawTarget).toLowerCase()
   const siteBase = deriveSiteBase(fileData)
 
+  // try to resolve by searching the provided allFiles list
   if (fileData?.allFiles && Array.isArray(fileData.allFiles)) {
-    const tLower = targetNormalized.toLowerCase()
+    const tLower = targetNormalized
     for (const f of fileData.allFiles) {
-      const fileSlug = normalizeFileEntrySlug(f)
-      if (fileSlug === tLower || fileSlug.endsWith('/' + tLower) || fileSlug.split('/').pop() === tLower) {
-        return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+$/g, '').replace(/\/+/g, '/')
+      const { original: fileSlugOriginal, lower: fileSlugLower } = getFileSlugInfo(f)
+
+      // exact match, directory match, or filename match
+      if (fileSlugLower === tLower || fileSlugLower.endsWith('/' + tLower) || fileSlugLower.split('/').pop() === tLower) {
+        // return path preserving the original casing from the source file entry
+        return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlugOriginal).replace(/\/+$|\\/g, '/').replace(/\/+/g, '/')
       }
+
+      // also check aliases in frontmatter (case-insensitive)
       try {
         const aliases = (f.frontmatter && (f.frontmatter.aliases || f.frontmatter.alias)) || null
         if (aliases) {
           const list = Array.isArray(aliases) ? aliases : [aliases]
           for (const a of list) {
-            const aNorm = slugifyKeepDirs(String(a || ''))
+            const aNorm = slugifyKeepDirs(String(a || '')).toLowerCase()
             if (aNorm === tLower || aNorm.split('/').pop() === tLower) {
-              return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+$/g, '').replace(/\/+/g, '/')
+              return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlugOriginal).replace(/\/+$|\\/g, '/').replace(/\/+/g, '/')
             }
           }
         }
@@ -76,10 +105,14 @@ function resolveWikiLink(link: string, fileData: any): string {
     }
   }
 
-  if (targetNormalized.indexOf('/') >= 0) {
-    return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + targetNormalized).replace(/\/+/g, '/')
+  // If the link explicitly includes a slash (a path), prefer returning that path under the site base
+  if (rawTarget.indexOf('/') >= 0) {
+    // preserve the user's casing for path segments when possible; fall back to slugified form
+    const cleaned = rawTarget.replace(/^\/+|\/+$/g, '')
+    return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + cleaned).replace(/\/+/g, '/')
   }
 
+  // Fallback: return the normalized (slugified) path under the site base
   return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + targetNormalized).replace(/\/+/g, '/')
 }
 
