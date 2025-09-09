@@ -1,21 +1,47 @@
 // quartz/components/CustomProperties.tsx
-// Root-aware single-file Quartz component that resolves Obsidian-style [[links]]
-// to absolute site paths based on the site's root (the directory where the site's
-// index/home page lives). All logic is contained in this single component file.
-
 import { QuartzComponent, QuartzComponentConstructor, QuartzComponentProps } from "./types"
 
-// Helper: create a slug but keep folder separators. Returns *no* leading slash.
-function slugifyKeepDirs(text: string): string {
-  return text
-    .trim()
-    // remove surrounding slashes
-    .replace(/^\/+|\/+$/g, "")
-    .toLowerCase()
-    // allow directories, convert spaces to dashes
-    .replace(/\s+/g, "-")
-    // remove characters except a-z, 0-9, dash and slash
-    .replace(/[^a-z0-9\-\/]/g, "")
+// ------- small path utilities (lightweight, Quartz-like behaviour) -------
+function splitAnchor(s: string): [string, string] {
+  const idx = s.indexOf("#")
+  if (idx === -1) return [s, ""]
+  const fp = s.slice(0, idx)
+  // keep a slugified anchor (Quartz uses github-slugger internally; here we lower-case and replace spaces)
+  const anchor = "#" + encodeURIComponent(String(s.slice(idx + 1)).trim().replace(/\s+/g, "-"))
+  return [fp, anchor]
+}
+
+function stripExt(s: string) {
+  return s.replace(/\.mdx?$|\.html?$/i, "")
+}
+
+function stripSlashes(s: string) {
+  return String(s || "").replace(/^\/+|\/+$/g, "")
+}
+
+function joinSegments(...parts: string[]) {
+  return parts.filter(Boolean).map(p => stripSlashes(p)).join("/")
+}
+
+// resolveRelative: from current canonical slug to target canonical slug (posix segments)
+function resolveRelative(curSlug: string, targetSlug: string): string {
+  const cur = stripSlashes(String(curSlug || ""))
+  const targ = stripSlashes(String(targetSlug || ""))
+  const curParts = cur === "" ? [] : cur.split("/")
+  const targParts = targ === "" ? [] : targ.split("/")
+
+  // treat cur as a *file* path: pop last segment to get its directory
+  if (curParts.length > 0) curParts.pop()
+
+  // find common prefix
+  let i = 0
+  while (i < curParts.length && i < targParts.length && curParts[i] === targParts[i]) i++
+  const up = curParts.length - i
+  const parts: string[] = []
+  for (let j = 0; j < up; j++) parts.push("..")
+  parts.push(...targParts.slice(i))
+  if (parts.length === 0) return "./"
+  return parts.join("/")
 }
 
 function ensureLeadingSlash(s: string) {
@@ -23,98 +49,151 @@ function ensureLeadingSlash(s: string) {
   return s.startsWith("/") ? s : "/" + s
 }
 
-// Try to derive the site root/base where the home index lives from fileData.
-// Quartz sites might expose this in different properties; we try a few and fallback to '/'.
+// normalize a discovered slug/path into the form Quartz uses (no leading slash, no ext, lowercase)
+function canonicalizeCandidate(s: string) {
+  let t = String(s || "")
+  try {
+    if (/^https?:\/\//i.test(t)) {
+      t = new URL(t).pathname
+    }
+  } catch (e) {}
+  t = stripExt(t)
+  t = stripSlashes(t).toLowerCase()
+  return t
+}
+
+// Helper to get the "current file slug" from fileData if available
+function getCurrentSlug(fileData: any) {
+  // checkbox through commonly exposed fields
+  return (fileData && (fileData.slug || fileData.url || fileData.path || fileData.file || fileData.relativePath)) ?
+    canonicalizeCandidate(fileData.slug || fileData.url || fileData.path || fileData.file || fileData.relativePath) :
+    ""
+}
+
+// Try to obtain allSlugs (preferred) or derive from allFiles like your original code
+function getAllSlugs(fileData: any): string[] | null {
+  if (!fileData) return null
+  if (Array.isArray(fileData.allSlugs)) return fileData.allSlugs.map((s: string) => canonicalizeCandidate(s))
+  if (Array.isArray(fileData.allFiles)) {
+    return fileData.allFiles.map((f: any) => canonicalizeCandidate(
+      f && (f.slug || f.url || f.path || f.file || f.relativePath || f.filePath || f._path || f.href || f.name) || ""
+    ))
+  }
+  return null
+}
+
+// transformInternalLink: convert user target into a "relative-ish" token similar to Quartz's transformInternalLink
+function transformInternalLink(target: string) {
+  let t = String(target || "").trim()
+  // leave ../ or ./ as-is (but strip extension)
+  if (t.startsWith("..")) {
+    return stripExt(t)
+  }
+  if (t.startsWith("./")) {
+    return "./" + stripExt(t.slice(2))
+  }
+  // if absolute slash, normalize to a root-relative like "./foo/bar"
+  if (t.startsWith("/")) {
+    return "./" + stripSlashes(stripExt(t))
+  }
+  // default: make it "./foo/bar"
+  return "./" + stripSlashes(stripExt(t))
+}
+
+// ------- Improved resolver: mirrors Quartz' CrawlLinks/transformLink behaviour -------
+function resolveWikiLink(link: string, fileData: any): string {
+  const obsidianLink = String(link || "").match(/^\[\[(.+?)(\|(.+))?\]\]$/)
+  if (!obsidianLink) return String(link)
+
+  const rawTarget = obsidianLink[1].trim()
+  const alias = (obsidianLink[3]) ? obsidianLink[3] : rawTarget.split("/").pop()
+
+  // site base (like your original helper)
+  const siteBase = deriveSiteBase(fileData) // '' or '/blog' style (no trailing slash)
+  const siteBasePrefix = siteBase ? ensureLeadingSlash(siteBase) : ""
+
+  // which strategy does this site want? fallback to 'absolute' (Quartz default)
+  const strategy = (fileData && (fileData.markdownLinkResolution || fileData.site?.markdownLinkResolution || fileData.quartz?.markdownLinkResolution)) || 'absolute'
+
+  // take care of anchors
+  const transformed = transformInternalLink(rawTarget) // e.g. './path/to/file' or '../something'
+  // remove leading './' (Quartz slices it off later) for canonical use
+  const withoutDot = transformed.startsWith("./") ? transformed.slice(2) : transformed
+  const [targetCanonical, targetAnchor] = splitAnchor(withoutDot)
+  const allSlugs = getAllSlugs(fileData)
+  const curSlug = getCurrentSlug(fileData)
+
+  // If we have canonical list of slugs, try to find precise matches first
+  if (allSlugs && Array.isArray(allSlugs)) {
+    const t = targetCanonical.toLowerCase()
+
+    // exact match (full slug)
+    const exact = allSlugs.find((s: string) => s === t)
+    if (exact) {
+      const resolved = exact
+      if (strategy === 'relative') {
+        return resolveRelative(curSlug, resolved) + targetAnchor
+      }
+      // absolute
+      return ensureLeadingSlash(siteBasePrefix + "/" + resolved).replace(/\/+/g, "/") + targetAnchor
+    }
+
+    // ends-with match (folder/target)
+    const ends = allSlugs.find((s: string) => s.endsWith("/" + t))
+    if (ends) {
+      const resolved = ends
+      if (strategy === 'relative') {
+        return resolveRelative(curSlug, resolved) + targetAnchor
+      }
+      return ensureLeadingSlash(siteBasePrefix + "/" + resolved).replace(/\/+/g, "/") + targetAnchor
+    }
+
+    // basename match (file name only) — used by 'shortest'
+    const basenameMatches = allSlugs.filter((s: string) => s.split("/").pop() === t)
+    if (strategy === 'shortest' && basenameMatches.length === 1) {
+      const resolved = basenameMatches[0]
+      // Quartz prefers a relative path when this is unique
+      return resolveRelative(curSlug, resolved) + targetAnchor
+    }
+  }
+
+  // If target looks like a path (contains '/') just use it under site base
+  if (targetCanonical.indexOf("/") >= 0) {
+    return ensureLeadingSlash(siteBasePrefix + "/" + targetCanonical).replace(/\/+/g, "/") + targetAnchor
+  }
+
+  // Fallback: assume it's a basename under the root
+  return ensureLeadingSlash(siteBasePrefix + "/" + targetCanonical).replace(/\/+/g, "/") + targetAnchor
+}
+
+// ----------------- rest of your component (unchanged except using resolveWikiLink) -----------------
+function slugifyKeepDirs(text: string): string {
+  return text
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-\/]/g, "")
+}
+
 function deriveSiteBase(fileData: any): string {
   const maybe = fileData?.site?.basePath || fileData?.site?.base || fileData?.base || fileData?.siteBase || '/'
   if (!maybe) return ''
-  // strip trailing slash, keep empty string if root
   const cleaned = maybe === '/' ? '' : String(maybe).replace(/\/+$/g, '')
-  // return without trailing slash (we add slashes when joining)
   return cleaned
 }
 
-// Normalize a candidate file entry from fileData.allFiles to a comparable slug
 function normalizeFileEntrySlug(f: any): string {
-  // Try common fields that a build index might provide
   const guess = (f && (f.slug || f.url || f.path || f.file || f.relativePath || f.filePath || f._path || f.href || f.name)) || ''
   let s = String(guess || '')
-  // If it's a full URL, try to extract path portion
   try {
     if (s.match(/^https?:\/\//)) {
       s = new URL(s).pathname
     }
-  } catch (e) {
-    // ignore
-  }
-  // remove extension if present (.md, .mdx, .html)
+  } catch (e) {}
   s = s.replace(/\.mdx?$|\.html?$/i, '')
-  // strip leading/trailing slashes and lowercase
   s = s.replace(/^\/+|\/+$/g, '').toLowerCase()
   return s
-}
-
-// Resolve a single wiki-style link ([[target]] or [[folder/target|Alias]]) into an absolute
-// site path starting from the site's root (where index lives). Uses fileData.allFiles
-// to find the correct path when possible, and falls back to a naive slug path.
-function resolveWikiLink(link: string, fileData: any): string {
-  const obsidianLink = String(link || '').match(/^\[\[(.+?)(\|(.+))?\]\]$/)
-  if (!obsidianLink) return String(link)
-
-  const rawTarget = obsidianLink[1].trim()
-  const targetNormalized = slugifyKeepDirs(rawTarget) // e.g. 'Authors/Flench 04' -> 'authors/flench-04'
-  const siteBase = deriveSiteBase(fileData) // e.g. '' or '/blog'
-
-  // If an index of files is available, try to find the best match
-  if (fileData?.allFiles && Array.isArray(fileData.allFiles)) {
-    const t = targetNormalized
-    // lower-case for comparisons
-    const tLower = t.toLowerCase()
-
-    for (const f of fileData.allFiles) {
-      const fileSlug = normalizeFileEntrySlug(f) // no leading slash
-
-      // Exact match (full slug)
-      if (fileSlug === tLower) {
-        return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+/g, '/')
-      }
-
-      // Ends-with match (target might be just basename)
-      if (fileSlug.endsWith('/' + tLower) || fileSlug === tLower) {
-        return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+/g, '/')
-      }
-
-      // basename match (final segment)
-      const base = fileSlug.split('/').pop()
-      if (base && base === tLower) {
-        return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+/g, '/')
-      }
-
-      // check aliases in frontmatter if present
-      try {
-        const aliases = (f.frontmatter && (f.frontmatter.aliases || f.frontmatter.alias)) || null
-        if (aliases) {
-          const list = Array.isArray(aliases) ? aliases : [aliases]
-          for (const a of list) {
-            const aNorm = slugifyKeepDirs(String(a || ''))
-            if (aNorm === tLower || aNorm.split('/').pop() === tLower) {
-              return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + fileSlug).replace(/\/+/g, '/')
-            }
-          }
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-  }
-
-  // No index match: if the target already looks like a path (contains '/'), use it
-  if (targetNormalized.indexOf('/') >= 0) {
-    return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + targetNormalized).replace(/\/+/g, '/')
-  }
-
-  // Final fallback: assume it's a basename under root
-  return ensureLeadingSlash((siteBase ? siteBase + '/' : '/') + targetNormalized).replace(/\/+/g, '/')
 }
 
 function CustomProperties({ fileData }: QuartzComponentProps) {
@@ -123,25 +202,20 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
     return null
   }
 
-  // A list of properties to ignore from display
   const ignoreList = new Set([
     'title', 'tags', 'date', 'publishdate', 'draft', 'aliases', 'description',
     'publish', 'created', 'published', 'cssclasses'
   ])
 
-  // Render a single value (string, wiki link, external link, array)
   function renderValue(value: any): any {
     if (typeof value === 'string') {
       const trimmed = value.trim()
-
-      // External http(s) link
       if (/^https?:\/\//i.test(trimmed)) {
         return (
           <a href={trimmed} target="_blank" rel="noopener noreferrer">{trimmed}</a>
         )
       }
 
-      // Obsidian-style [[link]]
       if (/^\[\[.+\]\]$/.test(trimmed)) {
         const m = trimmed.match(/^\[\[(.+?)(\|(.+))?\]\]$/)
         const alias = (m && m[3]) ? m[3] : (m ? m[1].split('/').pop() : trimmed)
@@ -149,7 +223,6 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
         return <a href={href}>{alias}</a>
       }
 
-      // Plain string
       return ' ' + trimmed
     }
 
@@ -163,11 +236,9 @@ function CustomProperties({ fileData }: QuartzComponentProps) {
       )
     }
 
-    // Any other value
     return String(value)
   }
 
-  // Collect displayable properties
   const properties = Object.keys(frontmatter || {})
     .filter(k => !ignoreList.has(k.toLowerCase()))
     .filter(k => {
