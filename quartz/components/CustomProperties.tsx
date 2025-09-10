@@ -60,7 +60,7 @@ export default ((userOpts?: Options) => {
 
     return (
       <details open>
-        <summary>Page Properties</summary>
+        <summary>Credits</summary>
         <ul>
           {keys.map((k) => (
             <li key={k}>
