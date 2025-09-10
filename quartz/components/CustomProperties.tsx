@@ -7,6 +7,9 @@ const KnowledgeCards: QuartzComponentConstructor = ({ fileData }) => {
     { year: "2025", text: "Still evolving..." },
   ]
 
+  // Safe access: fall back to empty array if links missing
+  const links = fileData?.links ?? []
+
   return () => (
     <div class="grid gap-4 md:grid-cols-2">
       {/* About Card */}
@@ -36,11 +39,11 @@ const KnowledgeCards: QuartzComponentConstructor = ({ fileData }) => {
       </div>
 
       {/* Related Pages Card */}
-      {fileData.links && fileData.links.length > 0 && (
+      {links.length > 0 && (
         <div class="rounded-2xl shadow-md p-4 bg-white dark:bg-gray-900">
           <h2 class="text-xl font-bold mb-2">Related Pages</h2>
           <ul class="list-disc list-inside space-y-1">
-            {fileData.links.map((link) => (
+            {links.map((link) => (
               <li>
                 <a
                   href={link.slug}
