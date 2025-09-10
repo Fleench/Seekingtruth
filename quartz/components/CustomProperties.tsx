@@ -1,6 +1,6 @@
 // quartz/components/PropertyList.tsx
 import { QuartzComponentConstructor, QuartzComponentProps } from "./types"
-import siteConfig from "../quartz.config" // import config for base URL
+import siteConfig from "../../quartz.config" // import config for base URL
 
 interface Options {
   exclude?: string[]
