@@ -28,7 +28,12 @@ export default ((userOpts?: Options) => {
       // External links
       if (/^https?:\/\//i.test(raw)) {
         return (
-          <a href={raw} target="_blank" rel="noopener noreferrer">
+          <a
+            href={raw}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline"
+          >
             {raw}
           </a>
         )
@@ -51,7 +56,11 @@ export default ((userOpts?: Options) => {
         const base = cfg.baseUrl ?? ""
         const href = file ? `${base}/${file.slug}` : "#"
 
-        return <a href={href}>{display}</a>
+        return (
+          <a href={href} className="text-blue-600 hover:underline">
+            {display}
+          </a>
+        )
       }
 
       // Fallback: just render as text
@@ -59,16 +68,29 @@ export default ((userOpts?: Options) => {
     }
 
     return (
-      <details open>
-        <summary>Credits</summary>
-        <ul>
-          {keys.map((k) => (
-            <li key={k}>
-              <strong>{k}:</strong> {renderValue(fm[k])}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <div className="mt-6">
+        <div className="rounded-2xl shadow-md border border-gray-200 bg-white dark:bg-gray-900 dark:border-gray-700">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
+              Credits
+            </h3>
+          </div>
+          <div className="p-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+              {keys.map((k) => (
+                <div key={k} className="flex flex-col">
+                  <dt className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {k}
+                  </dt>
+                  <dd className="text-sm text-gray-900 dark:text-gray-200">
+                    {renderValue(fm[k])}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      </div>
     )
   }
 
