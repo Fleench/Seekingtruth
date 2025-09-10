@@ -1,6 +1,5 @@
 // quartz/components/PropertyList.tsx
 import { QuartzComponentConstructor, QuartzComponentProps } from "./types"
-import siteConfig from "../../quartz.config" // import config for base URL
 
 interface Options {
   exclude?: string[]
@@ -13,7 +12,7 @@ const defaultOptions: Options = {
 export default ((userOpts?: Options) => {
   const opts = { ...defaultOptions, ...userOpts }
 
-  function PropertyList({ fileData, allFiles }: QuartzComponentProps) {
+  function PropertyList({ fileData, allFiles, cfg }: QuartzComponentProps) {
     const fm = fileData.frontmatter || {}
     const keys = Object.keys(fm).filter((k) => !opts.exclude.includes(k))
 
@@ -48,8 +47,8 @@ export default ((userOpts?: Options) => {
             f.slug.toLowerCase().endsWith("/" + target.toLowerCase())
         )
 
-        // Prepend site root (from quartz.config.ts)
-        const base = siteConfig.baseUrl || siteConfig.site?.url || ""
+        // Use site root from cfg
+        const base = cfg.baseUrl ?? ""
         const href = file ? `${base}/${file.slug}` : "#"
 
         return <a href={href}>{display}</a>
