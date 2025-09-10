@@ -1,82 +1,76 @@
-// quartz/components/CustomProperties.tsx
-import { QuartzComponentConstructor, QuartzComponentProps } from "../types"
+// quartz/components/PropertyList.tsx
+import { QuartzComponentConstructor, QuartzComponentProps } from "./types"
 
-const EXCLUDED_KEYS = ["title", "date", "tags"]
-
-// turn Obsidian [[Wiki Links]] into Quartz-style slugs
-function resolveLink(value: string): string {
-  const wikiLinkMatch = value.match(/^\[\[(.+?)\]\]$/)
-  if (wikiLinkMatch) {
-    const slug = wikiLinkMatch[1].replace(/\s+/g, "-").toLowerCase()
-    return `/${slug}`
-  }
-  return value
+interface Options {
+  exclude?: string[]
 }
 
-export default (() => {
-  function CustomProperties({ fileData }: QuartzComponentProps) {
-    const fm = fileData.frontmatter ?? {}
-    const keys = Object.keys(fm).filter(
-      (k) => !EXCLUDED_KEYS.includes(k) && fm[k] !== undefined && fm[k] !== ""
-    )
+const defaultOptions: Options = {
+  exclude: [],
+}
 
-    if (keys.length === 0) return null
+export default ((userOpts?: Options) => {
+  const opts = { ...defaultOptions, ...userOpts }
 
-    // Alpine-style toggle using data attributes
+  function PropertyList({ fileData, allFiles, cfg }: QuartzComponentProps) {
+    const fm = fileData.frontmatter || {}
+    const keys = Object.keys(fm).filter((k) => !opts.exclude.includes(k))
+
+    if (keys.length === 0) {
+      return null
+    }
+
+    function renderValue(val: any): JSX.Element {
+      if (!val) return <span />
+
+      const raw = String(val).trim()
+
+      // External links
+      if (/^https?:\/\//i.test(raw)) {
+        return (
+          <a href={raw} target="_blank" rel="noopener noreferrer">
+            {raw}
+          </a>
+        )
+      }
+
+      // Obsidian wiki links [[Page]], [[Page|Alias]], [[Folder/Page]]
+      const wiki = raw.match(/^\[\[(.+?)\]\]$/)
+      if (wiki) {
+        const [target, alias] = wiki[1].split("|")
+        const display = alias || target.split("/").pop() || target
+
+        // Find the file in allFiles by slug
+        const file = allFiles.find(
+          (f) =>
+            f.slug.toLowerCase() === target.toLowerCase() ||
+            f.slug.toLowerCase().endsWith("/" + target.toLowerCase())
+        )
+
+        // Use site root from cfg
+        const base = cfg.baseUrl ?? ""
+        const href = file ? `${base}/${file.slug}` : "#"
+
+        return <a href={href}>{display}</a>
+      }
+
+      // Fallback: just render as text
+      return <span>{raw}</span>
+    }
+
     return (
-      <div class="my-4 p-4 border rounded-lg shadow bg-white" x-data="{ open: true }">
-        <button
-          class="font-semibold text-lg w-full text-left"
-          x-on:click="open = !open"
-        >
-          <span x-show="open">▼ Credits</span>
-          <span x-show="!open">▶ Credits</span>
-        </button>
-
-        <div class="mt-2 space-y-2" x-show="open">
-          {keys.map((key) => {
-            const raw = fm[key]
-            const values = Array.isArray(raw) ? raw : [raw]
-
-            return (
-              <div class="flex flex-col" key={key}>
-                <span class="font-medium capitalize">{key}:</span>
-                <div class="ml-4">
-                  {values.map((val, i) => {
-                    const strVal = String(val).trim()
-                    if (strVal.startsWith("http")) {
-                      return (
-                        <a
-                          key={i}
-                          href={strVal}
-                          class="text-blue-600 underline"
-                          target="_blank"
-                        >
-                          {strVal}
-                        </a>
-                      )
-                    } else if (/^\[\[.+\]\]$/.test(strVal)) {
-                      return (
-                        <a
-                          key={i}
-                          href={resolveLink(strVal)}
-                          class="text-blue-600 underline"
-                        >
-                          {strVal.replace(/^\[\[(.+?)\]\]$/, "$1")}
-                        </a>
-                      )
-                    } else {
-                      return <span key={i}>{strVal}</span>
-                    }
-                  })}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <details open>
+        <summary>Credits</summary>
+        <ul>
+          {keys.map((k) => (
+            <li key={k}>
+              <strong>{k}:</strong> {renderValue(fm[k])}
+            </li>
+          ))}
+        </ul>
+      </details>
     )
   }
 
-  return CustomProperties
+  return PropertyList
 }) satisfies QuartzComponentConstructor
