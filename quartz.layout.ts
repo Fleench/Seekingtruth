@@ -24,7 +24,7 @@ export const defaultContentPageLayout: PageLayout = {
     Component.ArticleTitle(),
     Component.ContentMeta(),
     Component.TagList(),
-    Component.CustomProperties({ exclude: ["tags","publish","created","published","modified","cssclasses","title","status",] }),
+    Component.CustomProperties(/*{exclude: ["tags","publish","created","published","modified","cssclasses","title","status",] }*/),
   ],
   left: [
     Component.PageTitle(),
