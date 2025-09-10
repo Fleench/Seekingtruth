@@ -1,5 +1,6 @@
-// quartz/components/CustomProperties.tsx
+// quartz/components/PropertyList.tsx
 import { QuartzComponentConstructor, QuartzComponentProps } from "./types"
+import siteConfig from "../quartz.config" // import config for base URL
 
 interface Options {
   exclude?: string[]
@@ -34,20 +35,22 @@ export default ((userOpts?: Options) => {
         )
       }
 
-      // Obsidian wiki links [[Page]] or [[Page|Alias]]
+      // Obsidian wiki links [[Page]], [[Page|Alias]], [[Folder/Page]]
       const wiki = raw.match(/^\[\[(.+?)\]\]$/)
       if (wiki) {
         const [target, alias] = wiki[1].split("|")
-        const display = alias || target
+        const display = alias || target.split("/").pop() || target
 
-        // Find slug in allFiles (Quartz knows about all notes)
+        // Find the file in allFiles by slug
         const file = allFiles.find(
           (f) =>
             f.slug.toLowerCase() === target.toLowerCase() ||
             f.slug.toLowerCase().endsWith("/" + target.toLowerCase())
         )
 
-        const href = file ? `/${file.slug}` : "#"
+        // Prepend site root (from quartz.config.ts)
+        const base = siteConfig.baseUrl || siteConfig.site?.url || ""
+        const href = file ? `${base}/${file.slug}` : "#"
 
         return <a href={href}>{display}</a>
       }
