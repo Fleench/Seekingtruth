@@ -1,8 +1,10 @@
 ---
-{"publish":true,"created":"2025-09-09T10:02:54.593-06:00","modified":"2025-09-09T23:29:19.150-06:00","published":"2025-09-09T23:29:19.150-06:00","cssclasses":"","Author":"[[Flench04]]"}
+{"publish":true,"created":"2025-09-09T10:02:54.593-06:00","modified":"2025-09-16T22:16:53.894-06:00","published":"2025-09-16T22:16:53.894-06:00","cssclasses":"","Author":"[[Flench04]]"}
 ---
 
 # Who am I?
 # Authored Pages
 ---
 [[index\|index]]
+
+[[Studied Media/Scripture/Luke 15.11-32 RSV2CE\|Luke 15.11-32 RSV2CE]]
